@@ -30,7 +30,7 @@ func main() {
 
 	logger := log.New(os.Stdout, "", log.Llongfile|log.Ldate|log.Ltime)
 
-	app:= &application{
+	app := &application{
 		config: cfg,
 		logger: logger,
 	}

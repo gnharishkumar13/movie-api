@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/gnharishkumar13/movie-api/internal/data"
+	"github.com/gnharishkumar13/movie-api/internal/validator"
 	"net/http"
 	"time"
 )
@@ -13,7 +14,7 @@ func (app *application) healthCheckHandler(w http.ResponseWriter, r *http.Reques
 	//w.Header().Set("Content-Type", "application/json")
 
 	data := envelope{
-		"status":"available",
+		"status": "available",
 		"system_info": map[string]string{
 			"environment": app.config.env,
 			"version":     version,
@@ -26,9 +27,41 @@ func (app *application) healthCheckHandler(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-
 func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "create a new movie")
+
+	var input struct {
+		Title   string       `json:"title"`
+		Year    int32        `json:"year"`
+		Runtime data.Runtime `json:"runtime"`
+		Genres  []string     `json:"genres"`
+	}
+
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	// Copy the values from the input struct to a new Movie struct.
+	movie := &data.Movie{
+		Title:   input.Title,
+		Year:    input.Year,
+		Runtime: input.Runtime,
+		Genres:  input.Genres,
+	}
+
+	// Initialize a new Validator.
+	v := validator.New()
+
+	// Call the ValidateMovie() function and return a response containing the errors if
+	// any of the checks fail.
+	if data.ValidateMovie(v, movie); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	// Dump the contents of the input struct in a HTTP response.
+	fmt.Fprintf(w, "%+v\n", input)
 }
 
 func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request) {
@@ -44,9 +77,8 @@ func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request)
 		Title:     "test",
 		Year:      2021,
 		Runtime:   150,
-		Genres:    []string{"test","test1"},
+		Genres:    []string{"test", "test1"},
 		Version:   20,
-
 	}
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"movie": m}, nil)
