@@ -28,18 +28,18 @@ func main() {
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 	flag.Parse()
 
-	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
+	logger := log.New(os.Stdout, "", log.Llongfile|log.Ldate|log.Ltime)
 
 	app:= &application{
 		config: cfg,
 		logger: logger,
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/health", app.healthCheckHandler)
+
+	router := app.routes()
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      mux,
+		Handler:      router,
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
