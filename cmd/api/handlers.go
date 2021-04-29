@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/gnharishkumar13/movie-api/internal/data"
 	"net/http"
+	"time"
 )
 
 func (app *application) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
@@ -10,16 +12,17 @@ func (app *application) healthCheckHandler(w http.ResponseWriter, r *http.Reques
 	//js = fmt.Sprintf(js, app.config.env, version)
 	//w.Header().Set("Content-Type", "application/json")
 
-	data := map[string]string{
+	data := envelope{
 		"status":"available",
-		"environment": app.config.env,
-		"version": version,
+		"system_info": map[string]string{
+			"environment": app.config.env,
+			"version":     version,
+		},
 	}
 
 	err := app.writeJSON(w, http.StatusOK, data, nil)
 	if err != nil {
-		app.logger.Println(err)
-		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+		app.serverErrorResponse(w, r, err)
 	}
 }
 
@@ -31,9 +34,23 @@ func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Reques
 func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
-		http.NotFound(w, r)
+		app.notFoundResponse(w, r)
 		return
 	}
-	// Otherwise, interpolate the movie ID in a placeholder response.
-	fmt.Fprintf(w, "show the details of movie %d\n", id)
+
+	m := data.Movie{
+		ID:        id,
+		CreatedAt: time.Time{},
+		Title:     "test",
+		Year:      2021,
+		Runtime:   150,
+		Genres:    []string{"test","test1"},
+		Version:   20,
+
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"movie": m}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
