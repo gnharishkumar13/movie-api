@@ -5,6 +5,7 @@ import (
 	"github.com/gnharishkumar13/movie-api/internal/validator"
 	"github.com/lib/pq"
 	"time"
+	"errors"
 )
 
 type Movie struct {
@@ -40,7 +41,42 @@ func (m MovieModel) Insert(movie *Movie) error {
 }
 
 func (m MovieModel) Get(id int64) (*Movie, error) {
-	panic("implement me")
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+
+	// Define the SQL query for retrieving the movie data.
+	query := `
+        SELECT id, created_at, title, year, runtime, genres, version
+        FROM movies
+        WHERE id = $1`
+
+	// Declare a Movie struct to hold the data returned by the query.
+	var movie Movie
+
+	err := m.DB.QueryRow(query, id).Scan(&movie.ID,
+		&movie.CreatedAt,
+		&movie.Title,
+		&movie.Year,
+		&movie.Runtime,
+		pq.Array(&movie.Genres),
+		&movie.Version)
+
+	// Handle any errors. If there was no matching movie found, Scan() will return
+	// a sql.ErrNoRows error. We check for this and return our custom ErrRecordNotFound
+	// error instead.
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	// Otherwise, return a pointer to the Movie struct.
+	return &movie, nil
+
 }
 
 func (m MovieModel) Update(movie *Movie) error {

@@ -5,7 +5,7 @@ import (
 	"github.com/gnharishkumar13/movie-api/internal/data"
 	"github.com/gnharishkumar13/movie-api/internal/validator"
 	"net/http"
-	"time"
+	"errors"
 )
 
 func (app *application) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
@@ -82,17 +82,19 @@ func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	m := data.Movie{
-		ID:        id,
-		CreatedAt: time.Time{},
-		Title:     "test",
-		Year:      2021,
-		Runtime:   150,
-		Genres:    []string{"test", "test1"},
-		Version:   20,
+	movie, err := app.models.Movies.Get(id)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"movie": m}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"movie": movie}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
