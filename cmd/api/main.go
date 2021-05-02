@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"github.com/gnharishkumar13/movie-api/internal/data"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -20,6 +21,7 @@ const version = "1.0.0"
 type application struct {
 	config config
 	logger *log.Logger
+	models data.Models
 }
 
 type config struct {
@@ -36,15 +38,9 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 3000, " port to run the application")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 	flag.StringVar(&cfg.database.dsn, "db-dsn", os.Getenv("MOVIEDB_DB_DSN"), "PostgreSQL DSN")
-
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "", log.Llongfile|log.Ldate|log.Ltime)
-
-	app := &application{
-		config: cfg,
-		logger: logger,
-	}
 
 	//database setup
 	db, err := openDB(cfg)
@@ -62,7 +58,7 @@ func main() {
 		logger.Fatalf(err.Error(), nil)
 	}
 
-	migrator, err := migrate.NewWithDatabaseInstance("file:///path/to/your/migrations", "postgres", migrationDriver)
+	migrator, err := migrate.NewWithDatabaseInstance("file://migrations", "postgres", migrationDriver)
 	if err != nil {
 		logger.Fatalf(err.Error(), nil)
 	}
@@ -74,6 +70,13 @@ func main() {
 
 	logger.Printf("database migrations applied")
 
+	app := &application{
+		config: cfg,
+		logger: logger,
+		models: data.New(db),
+	}
+
+	//routes
 	router := app.routes()
 
 	srv := &http.Server{
