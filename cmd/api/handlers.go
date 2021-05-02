@@ -186,8 +186,8 @@ func (app *application) deleteMovieHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Write the updated movie record in a JSON response.
-	err = app.writeJSON(w, http.StatusOK, envelope{"movie": movie}, nil)
+	// Return a 200 OK status code along with a success message.
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "movie successfully deleted"}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
