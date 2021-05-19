@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gnharishkumar13/movie-api/internal/validator"
@@ -25,6 +26,7 @@ type Movies interface {
 	Get(id int64) (*Movie, error)
 	Update(movie *Movie) error
 	Delete(id int64) error
+	GetAll(title string, genres []string, filters Filters) ([]*Movie, Metadata, error)
 }
 
 type MovieModel struct {
@@ -159,6 +161,78 @@ func (m MovieModel) Delete(id int64) error {
 	}
 
 	return nil
+}
+
+// Create a new GetAll() method which returns a slice of movies. Although we're not
+// using them right now, we've set this up to accept the various filter parameters as
+// arguments.
+func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, Metadata, error) {
+
+	// Update the SQL query to include the LIMIT and OFFSET clauses with placeholder
+	// parameter values.
+	// Update the SQL query to include the window function which counts the total
+	// (filtered) records.
+
+	query := fmt.Sprintf(`
+	SELECT count(*) OVER(), id, created_at, title, year, runtime, genres, version
+	FROM movies
+	WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '') 
+	AND (genres @> $2 OR $2 = '{}')     
+	ORDER BY %s %s, id ASC
+	LIMIT $3 OFFSET $4`, filters.sortColumn(), filters.sortDirection())
+
+	// Create a context with a 3-second timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Use QueryContext() to execute the query. This returns a sql.Rows resultset
+	// containing the result.
+	args := []interface{}{title, pq.Array(genres), filters.limit(), filters.offset()}
+
+	rows, err := m.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+
+	// Importantly, defer a call to rows.Close() to ensure that the resultset is closed
+	// before GetAll() returns.
+	defer rows.Close()
+
+	// Declare a totalRecords variable.
+	totalRecords := 0
+	movies := []*Movie{}
+
+	for rows.Next() {
+		var movie Movie
+
+		err := rows.Scan(
+			&totalRecords, // Scan the count from the window function into totalRecords.
+			&movie.ID,
+			&movie.CreatedAt,
+			&movie.Title,
+			&movie.Year,
+			&movie.Runtime,
+			pq.Array(&movie.Genres),
+			&movie.Version,
+		)
+		if err != nil {
+			return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+		}
+
+		movies = append(movies, &movie)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+	}
+
+	// Generate a Metadata struct, passing in the total record count and pagination
+	// parameters from the client.
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	// Include the metadata struct when returning.
+	return movies, metadata, nil
+
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {

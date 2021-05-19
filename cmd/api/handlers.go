@@ -3,9 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http"
+
 	"github.com/gnharishkumar13/movie-api/internal/data"
 	"github.com/gnharishkumar13/movie-api/internal/validator"
-	"net/http"
 )
 
 func (app *application) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
@@ -199,6 +200,61 @@ func (app *application) deleteMovieHandler(w http.ResponseWriter, r *http.Reques
 
 	// Return a 200 OK status code along with a success message.
 	err = app.writeJSON(w, http.StatusOK, envelope{"message": "movie successfully deleted"}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) listMoviesHandler(w http.ResponseWriter, r *http.Request) {
+
+	// To keep things consistent with our other handlers, we'll define an input struct
+	// to hold the expected values from the request query string.
+	var input struct {
+		Title  string
+		Genres []string
+		data.Filters
+	}
+
+	// Initialize a new Validator instance.
+	v := validator.New()
+
+	// Call r.URL.Query() to get the url.Values map containing the query string data.
+	qs := r.URL.Query()
+
+	// Use our helpers to extract the title and genres query string values, falling back
+	// to defaults of an empty string and an empty slice respectively if they are not
+	// provided by the client.
+	input.Title = app.readString(qs, "title", "")
+	input.Genres = app.readCSV(qs, "genres", []string{})
+
+	// Get the page and page_size query string values as integers. Notice that we set
+	// the default page value to 1 and default page_size to 20, and that we pass the
+	// validator instance as the final argument here.
+	input.Page = app.readInt(qs, "page", 1, v)
+	input.PageSize = app.readInt(qs, "page_size", 20, v)
+
+	// Extract the sort query string value, falling back to "id" if it is not provided
+	// by the client (which will imply a ascending sort on movie ID).
+	input.Sort = app.readString(qs, "sort", "id")
+
+	input.SortSafelist = []string{"id", "title", "year", "runtime", "-id", "-title", "-year", "-runtime"}
+
+	// Execute the validation checks on the Filters struct and send a response
+	// containing the errors if necessary.
+	if data.ValidateFilters(v, input.Filters); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	// Accept the metadata struct as a return value.
+	movies, metadata, err := app.models.Movies.GetAll(input.Title, input.Genres, input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	// Include the metadata in the response envelope.
+	err = app.writeJSON(w, http.StatusOK, envelope{"movies": movies, "metadata": metadata}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
