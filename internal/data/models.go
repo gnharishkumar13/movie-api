@@ -10,11 +10,10 @@ var (
 	ErrEditConflict   = errors.New("edit conflict")
 )
 
-
 type Models struct {
 	Movies Movies
 }
 
-func New(db *sql.DB) Models  {
+func New(db *sql.DB) Models {
 	return Models{Movies: MovieModel{DB: db}}
 }
