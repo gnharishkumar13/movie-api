@@ -5,22 +5,24 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"github.com/gnharishkumar13/movie-api/internal/data"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/lib/pq"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gnharishkumar13/movie-api/internal/data"
+	"github.com/gnharishkumar13/movie-api/internal/jsonlog"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/lib/pq"
 )
 
 const version = "1.0.0"
 
 type application struct {
 	config config
-	logger *log.Logger
+	logger *jsonlog.Logger
 	models data.Models
 }
 
@@ -40,35 +42,35 @@ func main() {
 	flag.StringVar(&cfg.database.dsn, "db-dsn", os.Getenv("MOVIEDB_DB_DSN"), "PostgreSQL DSN")
 	flag.Parse()
 
-	logger := log.New(os.Stdout, "", log.Llongfile|log.Ldate|log.Ltime)
+	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
 
 	//database setup
 	db, err := openDB(cfg)
 	if err != nil {
-		logger.Fatal(err)
+		logger.PrintFatal(err, nil)
 	}
 
 	defer db.Close()
-	logger.Printf("database connection pool established")
+	logger.PrintInfo("database connection pool established", nil)
 
 	//migrations
 
 	migrationDriver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		logger.Fatalf(err.Error(), nil)
+		logger.PrintFatal(err, nil)
 	}
 
 	migrator, err := migrate.NewWithDatabaseInstance("file://migrations", "postgres", migrationDriver)
 	if err != nil {
-		logger.Fatalf(err.Error(), nil)
+		logger.PrintFatal(err, nil)
 	}
 
 	err = migrator.Up()
 	if err != nil && err != migrate.ErrNoChange {
-		logger.Fatalf(err.Error(), nil)
+		logger.PrintFatal(err, nil)
 	}
 
-	logger.Printf("database migrations applied")
+	logger.PrintInfo("database migrations applied", nil)
 
 	app := &application{
 		config: cfg,
@@ -80,17 +82,25 @@ func main() {
 	router := app.routes()
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      router,
+		Addr:    fmt.Sprintf(":%d", cfg.port),
+		Handler: router,
+		// Create a new Go log.Logger instance with the log.New() function, passing in
+		// our custom Logger as the first parameter. The "" and 0 indicate that the
+		// log.Logger instance should not use a prefix or any flags.
+		ErrorLog:     log.New(logger, "", 0),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
 
 	// Start the HTTP server.
-	logger.Printf("starting %s server on %s", cfg.env, srv.Addr)
+	logger.PrintInfo("starting server", map[string]string{
+		"addr": srv.Addr,
+		"env":  cfg.env,
+	})
 	err = srv.ListenAndServe()
-	logger.Fatal(err)
+	logger.PrintFatal(err, nil)
+
 }
 
 func openDB(cfg config) (*sql.DB, error) {
