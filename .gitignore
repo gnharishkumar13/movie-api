@@ -119,3 +119,8 @@ Temporary Items
 .history
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,jetbrains
+.envrc
+bin/
+vendor/
+idea/
+.idea/

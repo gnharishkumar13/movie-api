@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/gnharishkumar13/movie-api/internal/data"
 	"github.com/gnharishkumar13/movie-api/internal/validator"
@@ -22,8 +21,6 @@ func (app *application) healthCheckHandler(w http.ResponseWriter, r *http.Reques
 			"version":     version,
 		},
 	}
-	// Add a 4 second delay.
-	time.Sleep(4 * time.Second)
 
 	err := app.writeJSON(w, http.StatusOK, data, nil)
 	if err != nil {
